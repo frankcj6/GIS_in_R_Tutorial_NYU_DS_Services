@@ -1,0 +1,557 @@
+---
+title: "Introduction to Geographic Information Systems (GIS) in R: Workshop Documentation"
+author: "New York University Data Services"
+date: "1/11/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+In the past few years, the development of new R packages dedicated to geospatial analysis and visualization has contributed to the emergence of R as a powerful and user-friendly platform for geospatial analysis. While QGIS was traditionally the software of choice for those looking for an open-source Geographic Information Systems (GIS) option, it is now well worth your time to explore R as a possible open-source solution for your geospatial needs. To that end, this workshop aims to show you how to carry out basic GIS tasks within R Studio.
+
+The tutorial is divided into two parts. In the first part, we will cover how to:
++ Discover and download tabular data (as a CSV file) from an online repository of international statistics (in particular, the World Bank’s World Development Indicators data repository)
++ Download a spatial dataset (in this case, a shapefile) of world country boundaries
++ Load the tabular data and shapefile from steps (1) and (2) into R Studio.
++ Join the tabular data to the shapefile of country boundaries, visualize the tabular data on a map, and export the map for future use in published material.
+
+In the second part, we will learn how to:
++ Load a CSV file containing point coordinates (i.e. latitude and longitude information) into R Studio and overlay this point data against a polygon shapefile.
++ Query and subset spatial datasets based on specified criteria
++ Join different shapefiles together based on their relative spatial locations (i.e. conduct a spatial join) to facilitate data analysis.
++ Write shapefiles you generated or edited within R Studio to disk, so that you or your collaborators can, if necessary, import relevant spatial datasets (that reflect the work you did within R Studio) into other GIS software (such as QGIS or ArcGIS).
+
+After working through the following material, you will be well-positioned to use R Studio for your basic GIS research needs, as well as explore R’s more advanced geospatial capabilities on your own.
+
+# Part 1
+## 1. Preliminaries
+### 1a. Load required packages
+Please load the following packages, which we will use over the course of the tutorial:
+
+```{r}
+library(tidyverse)
+library(sf)
+library(tmap)
+```
+
+If you do not already have the aforementioned packages installed, you must install them before loading them into R. If you do not know how to install packages in R, please consult the relevant section of the “Code_Preview” document in NYU Data Services’ “Introduction to R” tutorial, which can be found here https://guides.nyu.edu/ds_class_descriptions/Introduction-to-R
+
+### 1b. Download tutorial data and set working directory
+
+Before we begin, please create a directory on your computer that is dedicated specifically to this workshop, and download the workshop data that has been provided to this directory. Then, please establish this as your working directory in R Studio. If you do not know how to set your working directory, please review the documentation in NYU Data Services’ “Introduction to R” tutorial (mentioned above). You might also consult the useful information in the “Loading Data” section of this Software Carpentry lesson, which discusses how to set your working directory.
+
+## 2. Download tabular country-level data from the World Bank’s World Development Indicators website
+
+In this tutorial, we will be making a choropleth world map based on data from the World Bank’s World Development Indicators database. First, please go to the following World Bank website, which hosts the World Development Indicators. Select all of the countries (by clicking on the check mark within the country tab ), select one data series (i.e. a variable) you are interested in mapping, and select the year for which you would like to map the selected variable (ideally, a year that is within the past few years). After you have made your selections, download your data as a CSV and place the CSV file containing the data in your workshop folder. If you would like more guidance on navigating the WB Development Indicators interface, please see “Step One” of this QGIS tutorial, which is also authored by NYU Data Services and works with the same data.
+
+In the worked example provided in this documentation file, we will be mapping the variable “Trade (% of GDP)”, which is the ratio of a country’s overall trade (exports + imports) to aggregate economic activity (GDP); it is one way of capturing the extent of a country’s integration into the global economy. We will map this variable for the year 2017. The CSV containing this information in this example is named “trade_gdp.” (Note that for convenience, this CSV has been included in the workshop data that you have downloaded, in case you would prefer to use this dataset instead of generating your own through the WB Development Indicators interface.)
+
+You may wish to open up the downloaded CSV to make sure everything looks okay, but there is no need to clean the raw data at this stage; we can clean the data within R Studio after the CSV has been loaded into memory.
+
+## 3. Load the tabular World Bank data into memory
+Load the CSV containing the data you downloaded from the World Bank into memory and assign the dataset to an object with a descriptive name. In this example:
+```{r}
+trade_gdp<-read_csv("trade_gdp.csv")
+```
+
+If you are unfamiliar with object assignment in R, please see the “Introduction to R” tutorial materials referenced above.
+
+If you would like to view the data within R Studio’s data viewer (which is often helpful), simply call the View function on the data frame you would like to examine. In this case, where our data frame has been named “trade_gdp” (see above), we write:
+```{r}
+View(trade_gdp)
+```
+
+## 4. Find GIS data, load the shapefile of world country boundaries into R Studio, inspect the shapefile’s attribute table, and view the shapefile’s geometry
+
+### 4a. Find GIS data
+
+In order to view our country-level data on a map, we must first find and load a shapefile of country borders into R Studio. A shapefile is the most prominent file format for storing and viewing vector data in GIS applications. Vector data is GIS data that uses points, lines, and polygons to represent real-world spatial phenomena; raster data, which is the other main type of GIS data, uses geographically explicit grid cells to represent spatial phenomena (raster data is beyond the scope of this tutorial, but see the “Further Reading” section below for resources on raster data analysis in R).
+
+When you’re looking for spatial data, a good place to start is NYU’s very own Spatial Data Repository (SDR), which contains a large collection of spatial data from NYU’s collections (while also allowing you to search the spatial data catalogs of other universities with whom NYU collaborates): https://geo.nyu.edu/.
+
+We can find a useful shapefile of world country boundaries by searching the NYU SDR. In particular, see the following link: https://geo.nyu.edu/catalog/stanford-ps917hm2349
+
+Note that this dataset is held by Stanford University, but because the data is indexed by NYU, we can find the record by searching NYU’s SDR. In addition to allowing us to download the shapefile, the link above provides important metadata that allows one to use the data in an appropriate way.
+
+While you could go ahead and download this shapefile if you were working on this project on your own, for the purposes of this workshop, we will use the world countries shapefile made available as part of the tutorial data. NYU Data Services staff downloaded this shapefile from NYU’s SDR at the link above, but performed some minor cleaning operations on the shapefile to save time and make it easier to work with (i.e. deleting some superfluous columns, deleting Antarctica etc.).
+
+### 4b. Load the shapefile into R
+
+We will use the st_read function that is part of the sf package (the most advanced and user-friendly package for handling vector data in R) to read the shapefile into R. We will assign the “world.shp” file to an object named “world_shapefile”. Note that upon running the command, relevant metadata about the shapefile (i.e. information about the shapefile’s spatial extent, the number of fields and records in its attribute table, and information about the shapefile’s coordinate system) is written into the console:
+
+```{r}
+world_shapefile<-st_read("world.shp")
+```
+
+### 4c. Inspect the shapefile’s attribute table
+
+If we want to view the shapefile’s attribute table (a table that is part of a shapefile and which stores information about the spatial dataset’s constituent records and data associated with those records) within R Studio’s data viewer, we can simply call the View function on the shapefile we’ve just read into R Studio:
+
+```{r}
+View(world_shapefile)
+```
+
+### 4d. View the shapefile’s geometry
+In dedicated GIS software such as QGIS and ArcGIS, loading a shapefile will immediately bring up a view of the shapefile’s geometry within the project window. Loading a shapefile into R Studio via the sf package will not automatically bring up a view of the shapefile’s geometry, but we can easily call forth a visual representation of the shapefile. There are a variety of different ways in which we might do this (for instance, by using ggplot), but we will use the mapping and spatial data visualization package called tmap to generate a simple outline of our shapefile, which will show up within R Studio’s “Plots” window:
+
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons()
+```
+
+The tm_shape function specifies the file we wish to map, while the tm_polygons() function tells tmap to draw the polygons that comprise this shapefile. Though you should get an intuitive sense of tmap’s syntax as we go, we won’t explicitly cover the tmap package’s syntax in this tutorial; if you expect to use tmap in the future, and want a more formal guide, an excellent place to start is the package’s official documentation, which is very thorough and user-friendly, and can be found here.
+
+As we go forward and make a choropleth map, we’ll elaborate on this simple map outline; for now, we just wanted to get a first-pass look at the shapefile. Before moving on, though, note that just as we can easily change the color of a shapefile in GIS programs like QGIS and ArcGIS, we can easily change the color of tmap polygons. For instance, if we want orange polygons:
+
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons("orange")
+```
+
+Or, if we want a shade of cyan:
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons("lightcyan2")
+```
+
+For a concise overview of color-related packages in R (which tmap draws on), see this useful guide.
+
+If we would rather not have the frame around the shapefile, it is easy to delete the frame by by calling the tm_layout function, and turning it off:
+
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons("lightcyan2")+
+  tm_layout(frame=FALSE)
+```
+
+### 4e. Interact with a dynamic map
+Those of you who are familiar with traditional GIS software will be used to interacting dynamically with a shapefile, such that you can do things like pan around, zoom in and zoom out, or click on particular polygons to ascertain relevant information. If you would like to view your shapefile within a more dynamic interface (rather than as a more static plot) the tmap package allows you to easily generate an interactive Leaflet map (Leaflet is a JavaScript web-mapping application that you’ve probably interacted with before on websites).
+
+To interact dynamically with a shapefile, we must simply change tmap to “view” mode using the tmap_mode function:
+
+```{r}
+tmap_mode("view")
+```
+
+Once tmap has been set to “view” mode, simply plot the shapefile again, using the commands above, and the map becomes interactive!
+
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons("lightcyan2")
+```
+
+To toggle back to a static map, simply use tmap_mode to toggle back to “plot”:
+
+```{r}
+tmap_mode("plot")
+```
+
+Then, when we ask tmap to display the shapefile, it will go back to a static map:
+
+```{r}
+tm_shape(world_shapefile)+
+  tm_polygons("lightcyan2")+
+  tm_layout(frame=FALSE)
+```
+
+## 5. Clean the tabular dataset containing the World Bank data in order to facilitate a table join
+
+In order to visualize the tabular country-level data we downloaded from the World Bank Development Indicators database, we must join (or merge; we’ll use the terms interchangeably) that tabular data to our spatial dataset of country boundaries (i.e. the shapefile we were working with in Step 4 above). You may have previous experience merging data; the procedure involved in joining tabular data to spatial data is very similar to the process of joining two tabular (i.e. non-spatial) datasets. Associating two datasets into one larger dataset that combines information from both requires the datasets to share a common field; this common field can be used to essentially “glue” the datasets together. The International Organization for Standardization provides 3-digit country codes for each of the world’s countries that can be used to uniquely identify countries when working with country-level data. Both our shapefile, and our table of World Bank data, contain a field with these standardized 3-digit ISO codes (this field is labelled “Country Code” in the tabular dataset, and “iso_a3” in the shapefile) and we will therefore use the 3-digit country code field to join the World Bank dataset to our shapefile of world country boundaries.
+
+Before we can successfully join the World Bank data frame to the shapefile, however, we need to clean up the World Bank dataframe that we imported and assigned to the “trade_gdp” object in Step 3. We’ll do a couple of things to prepare this data frame for the merge:
+
++ The “Series Name” and “Series Code” fields in the World Bank data frame don’t really convey useful information, and will end up just cluttering the shapefile’s attribute table after the join. So, we’ll delete these fields.
++ As a result of a quirk in how the World Bank CSV file was generated, the field containing the variable we want to map (here, trade as a percentage of GDP) is named after the year in which the data was collected (here, “[2017]YR2017”). It makes more sense for this field name to actually describe the variable it contains. To that end, we’ll rename this field “trade_pct_gdp.”
++ Finally, and most importantly, the name of the field containing countries’ 3-digit ISO codes in the shapefile is “iso_a3”, but the name of the field containing these same codes in the World Bankd data frame is “Country Code”. In order to join the World Bank data frame to the shapefile based on their common 3-digit ISO country codes, the fields containing these codes must be the same in both datasets. Since this field is named “iso_a3” in the shapefile, we’ll go ahead and rename the 3-digit country code field in the World Bank data frame (currently named “Country Code”) to “iso_a3”.
+
+We can make all of these changes to the “trade_gdp” data frame containing the World Bank data with the following code, which draws on the dplyr package that is part of the tidyverse:
+
+```{r}
+trade_gdp<-select(trade_gdp,-c("Series Name", "Series Code")) %>% 
+           rename(trade_pct_gdp="2017 [YR2017]") %>% 
+           rename(iso_a3="Country Code")
+```
+
+The first line of code above excises the “Series Name” and “Series Code” fields; the second renames the field that is titled “2017[YR2017]” to “trade_pct_gdp”; and the third renames the “Country Code” field to “iso_a3” so as to match the corresponding field name in the shapefile’s attribute table. These lines of code are connected with a pipe operator (%>%), which is used in dplyr syntax to chain together different tasks into one block of code, rather than typing out independent lines of code for each discrete task. When you see %>%, you can read that as symbolic shorthand for the words “and then.” Using %>% here is not essential, but for more complicated operations (especially when you want to pass the output of one function into subsequent functions), it can be extremely useful. For more information on working with dplyr, please see the documentation for NYU Data Services’ “Data Wrangling in R” tutorial.
+
+If you want to view the cleaned World Bank data frame within the R Studio data viewer, simply call the View function. In this example, to see our updated data frame, we would write:
+
+```{r}
+View(trade_gdp)
+```
+
+## 6. Join the cleaned data frame containing the World Bank data to the shapefile based on their common 3-digit ISO field
+Now, we will join the World Bank data frame to our shapefile of the world’s country boundaries, and assign the product of this join to a new spatial object, which we will call “world_trade_shapefile.” The following code joins the cleaned World Bank data frame from Step 5 (named “trade_gdp”) to our initial shapefile (assigned to the object “world_shapefile” in Step 4) based on the “iso_a3” field that is common to both:
+
+```{r}
+world_trade_shapefile<-full_join(world_shapefile, trade_gdp, by="iso_a3")
+```
+
+It might be a good idea to view the attribute table of the new shapefile that we created through the join that we just completed. When we call the View function on “world_trade_shapefile”, we will see the attribute table of our new shapefile, which now includes country-level information on our variable of interest (in this case, trade as a percentage of GDP):
+
+```{r}
+View(world_trade_shapefile)
+```
+
+## 7. Convert the data type of the field you want to map to numeric
+
+## 8. Generate a choropleth map!
+We’re now ready to use tmap to generate a choropleth map of our variable of interest!
+### 8a. Start out with a preliminary choropleth map
+Let’s first make a simple choropleth map that gives us a foundation to work with.
+
+To stay organized, we’ll assign the map to an object (which we’ll call map1):
+
+```{r}
+map1<-tm_shape(world_trade_shapefile)+
+      tm_polygons(col="trade_pct_gdp", n=6, style="jenks", palette="BuGn")
+```
+
+Let’s unpack this. The map we’ve assigned to the “map1” object is based on the “world_trade_shapefile” we generated in Step 6. We’ve also told tmap that we want to map the values contained in the “trade_pct_gdp” field (col=“trade_pct_gdp”), that we want the data to be partitioned into 6 bins (n=6), that we want to set break points in the data distribution using the Jenks Natural Breaks Classification (style=“jenks”), and that we want a blue/green color palette (palette=“BuGn”).
+
+To view the resulting map, simply type the name of the object that contains the map:
+```{r}
+map1
+```
+
+Of course, we can edit the map by altering the previous code. Let’s say, for instance, that we want to keep the Jenks classification system, but that we want the data to be partitioned into 4 bins, and that we would like to implement a Yellow/Red palette instead. Let’s assign this modified map to a new object, map2:
+
+```{r}
+map2<-tm_shape(world_trade_shapefile)+
+      tm_polygons(col="trade_pct_gdp", n=4, style="jenks", palette="YlOrRd")
+```
+
+Then, we’ll print the map that is now contained within the map2 object:
+
+```{r}
+map2
+```
+
+To learn more about color and palette options, refer again to this guide.
+
+To learn more about our options for classifying your data (aside from Jenks), see the documentation for the tm_polygons function within tmap. We could also pull up this documentation within R Studio by simply typing the following (which will bring up the relevant documentation in R Studio’s “Help” tab):
+
+```{r}
+?tm_polygons
+```
+
+You’ll notice that the tm_polygons function gives you a large number of options for customizing your map; here, we’re just scratching the surface.
+
+It’s also worth reminding ourselves that we always have the option of shifting from a static map to a dynamic map, and viewing our newly created choropleth within an interactive setting. Note that when you click on a country in this view, you can immediately view that country’s trade as a percentage of gdp:
+
+```{r}
+tmap_mode("view")
+
+map2
+```
+
+Let’s now go back to a static view, and consider additional steps in formatting the choropleth map for publication.
+```{r}
+tmap_mode("plot")
+```
+
+### 8b. Implement additional formatting to your choropleth map
+Let’s start by creating an object called “map3” that holds a map similar to the ones we created above, and then plotting the map:
+
+```{r}
+map3<-tm_shape(world_trade_shapefile)+
+      tm_polygons(col="trade_pct_gdp", n=6, style="jenks", palette="YlOrRd")
+
+map3
+```
+
+This is a nice start, but let’s say we want to make some formatting changes. First, let’s get rid of the frame around the map. Then, let’s change the name of the legend from “trade_pct_gdp” (the name of the field that contains the data) to “Trade % of GDP”, which is somewhat more elegant. We can create a new object that takes the map in map3 (above) and adds these changes; or alternatively, we can just modify the existing map that is held in map3. Let’s go with the latter option.
+
+```{r}
+map3<-
+  tm_shape(world_trade_shapefile)+
+  tm_polygons(col="trade_pct_gdp", n=6, title="Trade % of GDP", style="jenks", palette="YlOrRd")+
+  tm_layout(frame=FALSE)
+
+map3
+```
+
+Note that we specified the new name of the legend within the tm_polygons function (title="Trade % of GDP) and removed the frame through the tm_layout function (frame=FALSE).
+
+Let’s say that we would like the legend’s title to be spread across two rows; perhaps we would like “% of GDP” to be below “Trade”. In R, we can indicate a line break with a back slash followed by an “n” as in the following example:
+```{r}
+map3<-
+  tm_shape(world_trade_shapefile)+
+  tm_polygons(col="trade_pct_gdp", n=6, title="Trade \n% of GDP", style="jenks", palette="YlOrRd")+
+  tm_layout(frame=FALSE)
+
+map3
+```
+
+### 8c. Add a title and credits
+Now, let’s add a title to the map, as well as a “map credits” section that provides useful information to the viewer of the map about things like the map’s author, the provenance of the source data, and the map’s coordinate reference system. In the code below, we specify the main title of the map and the position of the title, using arguments in the tm_layout function; we specify the credits, and the size and position of the credits, using arguments in the tm_credits function:
+
+```{r}
+map3<-
+  tm_shape(world_trade_shapefile)+
+  tm_polygons(col="trade_pct_gdp", n=6, title="Trade \n% of GDP", style="jenks", palette="YlOrRd")+
+  tm_layout(frame=FALSE, main.title = "Commercial Integration by Country, 2017", main.title.position = "center")+
+  tm_credits("Author: NYU Data Services \n Data Source: World Bank Development Indicators \n CRS: WGS1984", position = c(0.65, 0), size=0.5)
+
+map3
+```
+
+Note that getting placements for titles, legends, credits, and other map elements may require some trial and error. There are plenty of options to further customize and refine your map to convey additional information or increase its aesthetic appeal. To get a sense of the the full range of options available to you, it is best to start with the tmap package’s official documentation.
+
+## 9. Export your map
+
+Once we are done creating and customizing our map, we can export it in various file formats for future use, distribution, or publication. To save the map to file, simply use the tmap_save function. In the code below, “map3” is the name of the object containing the map we want to write, while “trade_map.png” is the name of the file that will contain the map. This file will be written to your working directory:
+
+```{r}
+tmap_save(map3, "trade_map.png")
+```
+
+Note that we can also export maps from the plots window in R Studio; simply click on the “Export” button (next to the zoom button) for a variety of export options.
+
+# Part 2
+In this part of the tutorial, we will introduce two additional spatial datasets, which we will bring into R. The first is from the College of William and Mary’s AidData Project. The AidData project works to provide the research and policy community with datasets on the worldwide distribution of foreign aid, with the goal of facilitating analysis to “improve how sustainable development investments are targeted, monitored, and evaluated.” More details can be found here.
+
+Many of their datasets contain geographic information that allows data to be mapped and analyzed within GIS software. We will be working with one of these datasets, entitled the “World Bank Geocoded Research Release”, which can be found here. This collection contains data on the locations (around the world) of all World Bank projects approved between 1995 and 2014. The CSV file provided in the workshop materials that is titled “worldbank_project_locations” is derived from the downloadable materials at this site (The “worldbank_project_locations” CSV in your workshop materials was generated by joining the “projects” dataset to the “locations” dataset using the “project_id” field as the common identifier; both of these datasets are provided when you click the “DOWNLOAD” button on the AidData.org site that is linked above).
+
+We will also be working with a shapefile of constituency boundaries for the country of Malawi; this data has been downloaded from NYU’s Spatial Data Repository (SDR).
+
+We will imagine that we’re country analysts specializing in the study of the African country of Malawi, and that we have been asked to analyze foreign aid projects in Malawi at the constituency-level. Specifically, our task is to determine the number of unique World Bank foreign aid projects within each constituency in Malawi. While neither the polygon shapefile of constituency boundaries, nor the point shapefile of World Bank projects, can give us this information when taken on their own, we can ascertain this information by bringing these spatial datasets together using a common GIS procedure know as a spatial join.
+
+In what follows, we will (1) go through the process of importing our dataset of World Bank project locations and visualizing this information on our world map (which we worked with in Part One). We will then (2) filter the dataset of project locations based on specified criteria, and generate a smaller spatial dataset of foreign aid projects in Malawi that meet a certain funding threshold. Next, (3), we’ll implement a spatial join to determine the constituency in which each World Bank project (from Step 2) is located, before finally (4) manipulating the result of the spatial join with the dplyr package to ascertain the number of unique projects in each constituency.
+
+## 10. Bring the CSV file of World Bank project locations into R Studio
+We will bring the CSV file of World Bank project locations into R Studio and assign the data frame to an object that we will call “worldbank_projectlocations_dataset”:
+```{r}
+worldbank_projectlocations_dataset<-read_csv("worldbank_projects_locations.csv")
+```
+
+Then, go ahead and view the dataset within R Studio’s data viewer by calling the View function.
+
+```{r}
+View(worldbank_projectlocations_dataset)
+```
+
+Note that this dataframe contains location coordinates for each World Bank project (in the form of a latitude field and a longitude field). Right now, the data frame is not a spatial object, and so we cannot yet visualize the project locations on a map. In the next step, we will turn our current data frame (worldbank_project_locations_dataset) into a spatial object that is readable by the sf package, and plot the geocoded project locations using tmap.
+
+## 11. 11. Turn the data frame of World Bank project locations into a spatial object and plot it using tmap
+
+We will create a new object, “worldbank_locations_spatial”, to hold an sf object (in other words, a spatial object that can be read by the relevant geospatial package we’re working with) in which the coordinate information from the data frame in Step 10 can be interpreted and mapped. In order to transform the data frame into an sf object, we use the sf package’s “st_as_sf” function. If you have experience with ArcGIS or QGIS, what we are doing here is analogous to exporting a CSV with lat/long information to a shapefile.
+
+```{r}
+worldbank_locations_spatial<-st_as_sf(worldbank_projectlocations_dataset, coords=c("longitude", "latitude"), crs=4326)
+```
+
+In the code above, “worldbank_projectlocations_dataset” is the data frame we want to turn into a spatial object; coords=c(“longitude,”latitude“) indicates the names of the fields within the data frame that contain longitude and latitude information (here, the names of the fields containing longitude and latitude information are, intuitively enough,”longitude" and “latitude”); and finally, crs=4236 indicates the spatial reference information for the coordinates (crs=4326 corresponds to WGS1984). For more information on coordinate reference systems and resources for learning more about them, please see NYU Data Services’ Introductory GIS tutorials.
+
+We can now plot these locations on a map using tmap’s tm_dots function; we will assign the resulting map of these locations to an object entitled “project_locations”.
+
+```{r}
+project_locations<-
+  tm_shape(worldbank_locations_spatial)+
+  tm_dots()
+
+project_locations
+```
+
+In the above code, we used the tm_shape function to indicate the object we are interested in mapping, and we called the tm_dots function to indicate that the object is a point layer. We can change the color of our points in much the same way we changed the color of our polygons:
+
+```{r}
+project_locations<-
+  tm_shape(worldbank_locations_spatial)+
+  tm_dots("orange")
+
+project_locations
+```
+
+## 12. Overlay the point layer of World Bank project locations on top of our polygon shapefile of world countries
+
+One of the defining features of GIS software is its ability to layer different spatial datasets on top of each other, which facilitates visualization and the identification of spatial patterns. The tmap package’s syntax makes this type of layering fairly intuitive. To consider an example, let’s superimpose the point layer we plotted above in Step 11 over the polygon shapefile of country borders that we first mapped in Step 4:
+
+```{r}
+worldmap_projects<-
+  tm_shape(world_shapefile)+
+    tm_polygons()+
+  tm_shape(worldbank_locations_spatial)+
+    tm_dots()
+
+worldmap_projects
+```
+
+In the code above, we are simply combining the code from Steps 4 and 11 above. We first plot the country polygons; by appending the code to plot the point layer afterwards, we effectively add the point layer on top of the polygon layer. For experienced GIS users, what we are doing here is basically analogous to placing our point layer (“worldbank_locations_spatial”) above our polygon layer (“world_shapefile”) in the table of contents of ArcMap or QGIS, such that the former layer is superimposed on the latter layer.
+
+At this point, you probably have an intuitive sense of how you would go about changing the colors of the map layers. Let’s say we want our point layer to be red, and our polygons to be light blue:
+
+```{r}
+worldmap_projects<-
+  tm_shape(world_shapefile)+
+    tm_polygons("red2")+
+  tm_shape(worldbank_locations_spatial)+
+    tm_dots("lightblue1")
+
+worldmap_projects
+```
+
+## 13. Query and filter spatial data using dplyr
+Now, let’s filter the large point layer of WB projects to include only projects in Malawi. Furthemore, let us say that among the projects in Malawi, we are only interested in studying the spatial distribution of projects (with respect to constituencies) that have recieved a funding commitment of more than \$25,000,000. We will assign projects located in Malawi, and that meet this \$25,000,000 threshold, by using the filter function in dplyr; we will assign the result to an object called “malawi_foreignaid_sites”.
+
+```{r}
+malawi_foreignaid_sites<-filter(worldbank_locations_spatial, recipients=="Malawi" & total_commitments>25000000)
+```
+
+The above code takes the “worldbank_locations_spatial” object, and filters it to select only observations where the “recipients” field is set to “Malawi” and the “total_commitments” field is above 25,000,000; it then assigns this selection to a new spatial object, named “malawi_foreignaid_sites.” For more details on filtering rows using the dplyr package, see the documentation for NYU Data Services’ “Data Wrangling in R” workshop. One of the benefits of doing your GIS work in R is that you can use dplyr to interact with your attribute table.
+
+If you want to view the observations in the new “malawi_foreignaid_sites” object we just created within R Studio, simply call the View function:
+
+```{r}
+View(malawi_foreignaid_sites)
+```
+
+## 14. Visualize the relevant foreign aid sites in Malawi juxtaposed against the shapefile of Malawi’s constituency boundaries
+
+### 14a. Bring the Malawi constituency shapefile into R Studio
+The workshop data you downloaded contains a shapefile of Malawi constituency borders from the NYU Spatial Data Repository. The shapefile can also be found here. Bring the shapefile of Malawi constituencies into R Studio and assign it to an object called “malawi_shapefile”:
+```{r}
+malawi_shapefile<-st_read("MAA.shp")
+```
+
+### 14b. Overlay the spatial object containing the relevant foreign aid sites against Malawi’s constituency boundaries
+To motivate our task, let’s first overlay “malawi_foreignaid_sites” (the spatial object we created above in Step 13) against the shapefile of Malawi constituency boundaries. As before, we will do this with tmap:
+
+```{r}
+malawi_constituency_project_map<-
+  tm_shape(malawi_shapefile)+
+    tm_polygons("red2")+
+  tm_shape(malawi_foreignaid_sites)+
+    tm_dots("lightblue1")
+
+malawi_constituency_project_map
+```
+
+We can use this visual representation to motivate our task: essentially, we want to find the number of distinct World Bank projects (represented as points in the above figure) within each district in Malawi (represented as polygons in the above figure).
+
+## 15. Reproject our point layer and polygon layer into a projection appropriate for Malawi, and then use the st_join function to carry out a spatial join between the two layers
+
+### 15a. Reproject the relevant data
+The sf package can only carry out a spatial join between vector layers that are in projected coordinates. Right now, both “malawi_shapefile” and “malawi_foreignaid_sites” are in a geographic coordinate system (specifically, WGS1984). We must therefore project these objects into a projected coordinate system that is appropriate for Malawi. A bit of research suggests that EPSG:20936 would be an appropriate projection for Malawi (https://epsg.io/20936). For more information and resources on coordinate systems and map projections, please see Appendix 1 in NYU Data Services’ QGIS tutorial, which is available here.
+
+Changing the coordinate reference systems of spatial datasets from one coordinate reference system to another is a common GIS task. Within the sf package, we can make these conversions using the st_transform function. To convert our shapefile of Malawi’s constituency boundaries into our desired coordinate reference system, and assign this newly projected layer to an object named “malawi_constituency_shapefile_projected”, we use the following code:
+
+```{r}
+malawi_constituency_shapefile_projected<-st_transform(malawi_shapefile, 20936)
+```
+
+In the above code, st_transform calls the function; “malawi_shapefile” is the name of the object we want to convert into another coordinate system; and 20936 is the EPSG code of the coordinate system to which we want to convert “malawi_shapefile”.
+
+We use similar code to change the point layer of World Bank projects in Malawi into the desired coordinate reference system, and assign the result to an object that indicates this transformation:
+
+```{r}
+malawi_foreignaid_sites_projected<-st_transform(malawi_foreignaid_sites, 20936)
+```
+
+### 15b. Carry out the spatial join
+Now, let’s carry out a spatial join between these projected layers. A spatial join is a common GIS procedure that allows you to link datasets based on the relative spatial locations of the observations, even in the absence of a common field. In other words, a spatial join allows you to join datasets based on shared location attributes, even when those datasets don’t have a common field that can be used to carry out a conventional table join (akin to the one we carried out in Step 6 above).
+
+To carry out a spatial join, we will use the sf package’s st_join function, and assign the result to an object called “malawi_projects_districts_spatialjoin.”
+```{r}
+malawi_projects_constituencies_spatialjoin<-st_join(malawi_foreignaid_sites_projected, malawi_constituency_shapefile_projected )
+```
+
+In the above code, st_join is of course the function we are calling; the arguments are the two spatial objects we want to join. The first argument (in this case, “malawi_foreignaid_sites_projected”) is the object to which we want to join information from the second object (in this case, “malawi_constituency_shapefile_projected”). If you are familiar with QGIS, the first argument to the st_join function is equivalent to the “input layer” while the second argument is akin to the “join layer” within QGIS’s “Join Attributes by Location” tool.
+
+We can use the View function to examine the attribute table of the spatial object that results from the join:
+
+```{r}
+View(malawi_projects_constituencies_spatialjoin)
+```
+
+If we scroll across the table, we’ll note that information from the “malawi_constituency_shapefile_projected” object’s attribute table has been joined to the “malawi_foreignaid_sites_projected” object’s attribute’s table (in particular, information from the former appears right after the “geometry” field in the attribute table that results from the spatial join; the “geometry” field is the last field in the attribute table of “malawi_foreignaid_sites_projected”).
+
+In short, the attribute table that results from our spatial join (stored within the “malawi_projects_districts_spatialjoin” object) gives us the name of the constituency in which every single project site is located; this is information which we previously did not have, and which could not have been uncovered without the unique capabilities of geospatial software.
+
+## 16. Use dplyr to calculate the total number of unique projects within each constituency
+Now that we have a spatial dataset containing information about the constituency in which each project of interest is located, we would like to determine the total number of unique projects within each constituency (Note: World Bank projects are large and complex, and and in many cases, a single project can sprawl geographically across multiple sites; when we say we want to calculate the total number of unique projects within each constituency, it means that even if a given project has multiple project sites within a given constituency, we only want to count it once when performing our summation).
+
+We can do this fairly easily through some basic data manipulation using the dplyr package. In particular, we will define a new object (called “projects_per_constituency”) that first takes the product of the spatial join in Step 14 (“malawi_projects_constituencies_spatialjoin”), and then uses the group_by function within dplyr to group together observations in the “malawi_projects_constituencies_spatialjoin” dataset by ID (ID refers to the constituency ID; it is the field which effectively delineates the distinct constituencies in Malawi). It then uses the summarize function, in conjunction with the n_distinct function, to generate a summary table that provides the number of distinct projects within each constituency:
+```{r}
+projects_per_constituency<-malawi_projects_constituencies_spatialjoin %>% 
+                           group_by(ID) %>% 
+                           summarize(n_distinct(project_id))
+```
+
+In the above code, we are taking the outcome of the spatial join from Step 14 (“malawi_projects_constituencies_spatialjoin”), and then (indicated by the pipe, %>%) grouping this data by constituency IDs, and then generating a summary table with a field that indicates the sum of the number of distinct World Bank project ID’s (project_id) associated with each constituency ID (i.e. the grouping variable). In other words, the code above counts up the number of distinct project IDs associated with each constituency ID. Recall that you can learn more about the functions we have used by typing the function name, preceded by a ? (for instance, ?group_by).
+
+We can view the attribute table associated with the spatial object we’ve created by using the View function:
+```{r}
+View(projects_per_constituency)
+```
+
+For convenience, we will print the first few rows of the attribute table of the spatial object we have generated. The first field/column contains the constituency ID, while the second field contains the count of the number of unique World Bank projects within the corresponding constituency.
+```{r}
+head(projects_per_constituency)
+```
+
+Note that if we’d like to change the name of the field containing the count variable to something more descriptive or intuitive (say, to something like “sum_unique_projects”), it is easy to do so using dplyr’s rename function. The first argument of the rename function is the name of the spatial object we want to modify (“projects_per_constituency”), while the second argument is the field’s desired new name (“sum_unique_projects”) followed by an “=”, followed by the field’s old name (“n_distinct(project_id)”, which is in quotes so that dplyr doesn’t mistakenly thing we’re trying to call the n_distinct function. When we print the first few rows of the modified “projects_per_constituency” object, note that the second field’s name has been changed.
+
+```{r}
+projects_per_constituency<-rename(projects_per_constituency, sum_unique_projects="n_distinct(project_id)")
+
+head(projects_per_constituency)
+```
+## 17. Join our table on projects per constituency created in Step 16 (“projects_per_constituency”) back to the initial shapefile of Malawi constituencies ("malawi_shapefile), based on ID
+
+### 17a. Convert the “projects_per_constituency” sf object into a data frame
+he sf package does not allow for the merging of two sf objects on the basis of a common id. To join “projects_per_constituency” into our “malawi_shapefile” object, let’s therefore first convert the “projects_per_constituency” sf object we created in Step 15 into a dataframe:
+```{r}
+projects_per_constituency_dataframe<-as.data.frame(projects_per_constituency)
+```
+
+### 17b. Implement the table join
+Then, we join this data frame to “malawi_shapefile” using ID as the join variable, and assign the result to a new object called “malawi_shapefile_projects_per_constituency”:
+```{r}
+malawi_shapefile_projects_per_constituency<-full_join(malawi_shapefile, projects_per_constituency_dataframe, by="ID")
+```
+Go ahead and view the attribute table associated with this spatial object; you’ll note that it contains all of the information from the original shapefile of Malawi constituencies, along with with a field (i.e. “sum_unique_projects”) with information on the total number of unique projects located in each constituency.
+
+## 18. Exporting sf objects for use in other GIS software
+Let’s say that we want to share the spatial dataset we created in Step 16 (i.e. “malawi_shapefile_projects_per_constituency”) with a collaborator, but our collaborator is not an R user. As a result, we will have to provide our collaborator with a file that can be opened up in GIS software, such as ArcGIS or QGIS. To do so, we can easily write the file of interest ("malawi_shapefile_projects_per_constituency) to disk, which could then be opened by our collaborator in the GIS program of his or her choice. To write the file, we use the sf package’s st_write function:
+
+```{r}
+st_write(malawi_shapefile_projects_per_constituency, "malawi_shapefile_projects_per_constituency.shp")
+```
+
+In the above code, st_write is the function call; the first argument is the name of the object we want to write to our disk, while the second argument is the name we want to give to the file that will be written to our disk along with its file extension (since we want the file to be written as a shapefile, we use the .shp extension). At this point, the “malawi_shapefile_projects_per_constituency.shp” file will be written to your working directory; this file can be shared with our collaborator, who can open up the shapefile in ArcGIS or QGIS. If you are a GIS user, you may wish to open up ArcGIS or QGIS and import this newly written shapefile to verify that everything looks as expected.
+
+# Conclusion and further reading
+Our brief tutorial only scratches the surface of R’s geospatial capabilities; if you’re interested in learning more about the packages discussed above, as well as other GIS packages written for R, there are a few good places to start.
+
+The first is a book titled “Geocomputation with R”, by Robin Lovelace, Jakub Nowosad, and Jannes Muenchow. The book is available as a physical copy for purchase; however, the book is open-source, and can therfore be accessed in full at the following link: https://geocompr.robinlovelace.net/
+
+The second is a book titled “An Introduction to R for Spatial Analysis and Mapping” by Chris Brunsdon and Lex Comber. If you use this book, be sure to use the second edition, which emphasizes the sf package; the first edition is somewhat outdated.
+
+Both of the books mentioned above include a discussion of raster analysis in R, which is beyond the scope of this tutorial. If you are especially interested in raster analysis, an additional resource worth consulting (in addition to the two books mentioned above), is a tutorial, written by Robert Hijmans, on Spatial Data Science with R. It provides a good overview of raster-specific packages. It also offers useful coverage of spatial statistics and modeling.
+
+# References
+
+Brunsdon, Chris, and Lex Comber. 2019. An Introduction to R for Spatial Analysis and Mapping (2nd ed.). London: Sage Publications, Ltd. 
+
+Frazier, Melanie. “R Color Cheatsheet.” Accessed August 28, 2020. https://www.nceas.ucsb.edu/sites/default/files/2020-04/colorPaletteCheatsheet.pdf
+
+Hijmans, Robert J. “Spatial Data Science With R.” Accessed August 28, 2020. https://rspatial.org/
+
+Lovelace, Robin, Jakub Nowosad, and Jannes Muenchow. 2019. Geocomputation With R. Boca Raton: CRC Press.
+
+NYU Data Services Tutorials. “Data Wrangling in R.” Last Modified November 3, 2019. https://guides.nyu.edu/ds_class_descriptions/Data-Wrangling-in-R
+
+NYU Data Services Tutorials. “Introduction to QGIS.” Last Modified April 30, 2020. https://docs.google.com/document/d/15kOALmDWGI00Hsu-gDthW_b2sm2Auv-MI9qmrjk4h-4/edit#
+
+NYU Data Services Tutorials. “Introduction to R.” Last Modified December 2016. https://guides.nyu.edu/ds_class_descriptions/Introduction-to-R
+
+Strandow, Daniel, Michael Findley, Daniel Nielson, and Joshua Powell. 2011. “The UCDP AidData codebook on Geo-referencing Foreign Aid. Version 1.1.” Uppsala Conflict Data Program. Uppsala, Sweden: Uppsala University.
+
+The Carpentries: Programming with R. “Analyzing Patient Data.” Accessed August 28, 2020. http://swcarpentry.github.io/r-novice-inflammation/
+
+The World Bank: IBRD-IDA. “DataBank: World Development Indicators”. Accessed March 3, 2020. https://databank.worldbank.org/reports.aspx?source=world-development-indicators
