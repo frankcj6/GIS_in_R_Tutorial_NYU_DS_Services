@@ -60,6 +60,12 @@ trade_gdp<-read_csv("trade_gdp.csv")
 
 If you are unfamiliar with object assignment in R, please see the “Introduction to R” tutorial materials referenced above.
 
+Once the data is being read, we can use str() to check how the dataframe is structured, such as column names, column types, as well as a a small sample of rows. It is important to examine the types of columns/variables before any data manipulation such as joining the dataset with the other.
+```{r}
+str(trade_gdp)
+```
+
+
 If you would like to view the data within R Studio’s data viewer (which is often helpful), simply call the View function on the data frame you would like to examine. In this case, where our data frame has been named “trade_gdp” (see above), we write:
 ```{r}
 View(trade_gdp)
@@ -84,8 +90,13 @@ While you could go ahead and download this shapefile if you were working on this
 We will use the st_read function that is part of the sf package (the most advanced and user-friendly package for handling vector data in R) to read the shapefile into R. We will assign the “world.shp” file to an object named “world_shapefile”. Note that upon running the command, relevant metadata about the shapefile (i.e. information about the shapefile’s spatial extent, the number of fields and records in its attribute table, and information about the shapefile’s coordinate system) is written into the console:
 
 ```{r}
-world_shapefile<-st_read("world.shp")
+world_shapefile<-st_read("world.shp", stringsAsFactors = FALSE)
 ```
+Again, we can use str() to check the types of columns and compare if the columns "iso_a3" in the “world_shapefile” and "trade_gdp" are of the same type, which will be used as primary key to merge the two datasets.
+```{r}
+str(world_shapefile)
+```
+
 
 ### 4c. Inspect the shapefile’s attribute table
 
@@ -185,10 +196,16 @@ View(trade_gdp)
 ```
 
 ## 6. Join the cleaned data frame containing the World Bank data to the shapefile based on their common 3-digit ISO field
-Now, we will join the World Bank data frame to our shapefile of the world’s country boundaries, and assign the product of this join to a new spatial object, which we will call “world_trade_shapefile.” The following code joins the cleaned World Bank data frame from Step 5 (named “trade_gdp”) to our initial shapefile (assigned to the object “world_shapefile” in Step 4) based on the “iso_a3” field that is common to both:
+Now, we will join the World Bank data frame to our shapefile of the world’s country boundaries, and assign the product of this join to a new spatial object, which we will call “world_trade_shapefile.” The following code joins the cleaned World Bank data frame from Step 5 (named “trade_gdp”) to our initial shapefile (assigned to the object “world_shapefile” in Step 4) based on two columns that are common to both. The primary key for the join is the “iso_a3” field; for the missing values, i.e. “-99”, in the column "iso_a3" in the "world_shapefile", we can instead join them with "trade_gdp" by country name, i.e. "name" in the "world_shapefile" and "Country Name" in the "trade_gdp". There are eight countries/regions that have "iso_a3" of “-99” in the "world_shapefile", and four of them can be successfully recognized and merged using the second key of country name. The joined results separately by the two keys for the rows missing and non-missing "iso_a3" in the "world_shapefile" are then combined vertically using rbind() function:
 
 ```{r}
-world_trade_shapefile<-full_join(world_shapefile, trade_gdp, by="iso_a3")
+world_trade_shapefile <- rbind(
+  left_join(world_shapefile[which(world_shapefile$iso_a3 !="-99"),], 
+            trade_gdp[,-which(colnames(trade_gdp) == "Country Name")], by="iso_a3"),
+  left_join(world_shapefile[which(world_shapefile$iso_a3 =="-99"),
+                            -which(colnames(world_shapefile) == "iso_a3")], 
+            trade_gdp, by= c("name" = "Country Name"))
+)
 ```
 
 It might be a good idea to view the attribute table of the new shapefile that we created through the join that we just completed. When we call the View function on “world_trade_shapefile”, we will see the attribute table of our new shapefile, which now includes country-level information on our variable of interest (in this case, trade as a percentage of GDP):
@@ -198,6 +215,23 @@ View(world_trade_shapefile)
 ```
 
 ## 7. Convert the data type of the field you want to map to numeric
+Currently, the field we want to map (named “trade_pct_gdp”) is a character field. We can confirm this using the class function, which returns the data type of a specified vector (world_trade_shapefile$trade_pct_gdp is simply the syntax we use to tell R that we are interested in the class of the “trade_pct_gdp” field within “world_trade_shapefile”.)
+
+```{r}
+class(world_trade_shapefile$trade_pct_gdp)
+```
+
+However, in order to generate a choropleth map of country-level variation in our variable of interest (here, trade as a percentage of GDP) through the tmap package, this variable must be converted from character to numeric (a different R data type). We can do this with the following:
+
+```{r}
+world_trade_shapefile$trade_pct_gdp<-as.numeric(world_trade_shapefile$trade_pct_gdp)
+```
+
+We can confirm that the conversion has taken place, and that the field is therefore ready to map:
+
+```{r}
+class(world_trade_shapefile$trade_pct_gdp) 
+```
 
 ## 8. Generate a choropleth map!
 We’re now ready to use tmap to generate a choropleth map of our variable of interest!
@@ -512,7 +546,7 @@ projects_per_constituency_dataframe<-as.data.frame(projects_per_constituency)
 ### 17b. Implement the table join
 Then, we join this data frame to “malawi_shapefile” using ID as the join variable, and assign the result to a new object called “malawi_shapefile_projects_per_constituency”:
 ```{r}
-malawi_shapefile_projects_per_constituency<-full_join(malawi_shapefile, projects_per_constituency_dataframe, by="ID")
+malawi_shapefile_projects_per_constituency<-left_join(malawi_shapefile, projects_per_constituency_dataframe, by="ID")
 ```
 Go ahead and view the attribute table associated with this spatial object; you’ll note that it contains all of the information from the original shapefile of Malawi constituencies, along with with a field (i.e. “sum_unique_projects”) with information on the total number of unique projects located in each constituency.
 
