@@ -4,6 +4,10 @@
 - [x] initial upload
 - [ ] comment section change
 - [ ] code change for section 7
+- [x] code change for section 3
+- [x] code change for section 4b
+- [x] code change for section 6
+- [x] code change for section 17b
 
 
-Some updates by Junhui
+
