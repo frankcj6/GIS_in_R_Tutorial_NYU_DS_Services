@@ -123,6 +123,7 @@ head(world_shapefile)
 In dedicated GIS software such as QGIS and ArcGIS, loading a shapefile will immediately bring up a view of the shapefile’s geometry within the project window. Loading a shapefile into R Studio via the sf package will not automatically bring up a view of the shapefile’s geometry, but we can easily call forth a visual representation of the shapefile. There are a variety of different ways in which we might do this (for instance, by using ggplot), but we will use the mapping and spatial data visualization package called tmap to generate a simple outline of our shapefile, which will show up within R Studio’s “Plots” window:
 
 ```{r}
+# create visualization of the shapefile
 tm_shape(world_shapefile)+
   tm_polygons()
 ```
@@ -132,12 +133,14 @@ The tm_shape function specifies the file we wish to map, while the tm_polygons()
 As we go forward and make a choropleth map, we’ll elaborate on this simple map outline; for now, we just wanted to get a first-pass look at the shapefile. Before moving on, though, note that just as we can easily change the color of a shapefile in GIS programs like QGIS and ArcGIS, we can easily change the color of tmap polygons. For instance, if we want orange polygons:
 
 ```{r}
+# create visualization of the shapefile with the color of orange
 tm_shape(world_shapefile)+
   tm_polygons("orange")
 ```
 
 Or, if we want a shade of cyan:
 ```{r}
+# create visualization of the shapefile with the color of cyan
 tm_shape(world_shapefile)+
   tm_polygons("lightcyan2")
 ```
@@ -147,6 +150,7 @@ For a concise overview of color-related packages in R (which tmap draws on), see
 If we would rather not have the frame around the shapefile, it is easy to delete the frame by by calling the tm_layout function, and turning it off:
 
 ```{r}
+# create visualization of the shapefile without the frame
 tm_shape(world_shapefile)+
   tm_polygons("lightcyan2")+
   tm_layout(frame=FALSE)
@@ -158,12 +162,14 @@ Those of you who are familiar with traditional GIS software will be used to inte
 To interact dynamically with a shapefile, we must simply change tmap to “view” mode using the tmap_mode function:
 
 ```{r}
+# switch to interactive visualization
 tmap_mode("view")
 ```
 
 Once tmap has been set to “view” mode, simply plot the shapefile again, using the commands above, and the map becomes interactive!
 
 ```{r}
+# create interactive visualization
 tm_shape(world_shapefile)+
   tm_polygons("lightcyan2")
 ```
@@ -171,6 +177,7 @@ tm_shape(world_shapefile)+
 To toggle back to a static map, simply use tmap_mode to toggle back to “plot”:
 
 ```{r}
+# switch back to static visualization
 tmap_mode("plot")
 ```
 
@@ -216,10 +223,10 @@ head(trade_gdp)
 Now, we will join the World Bank data frame to our shapefile of the world’s country boundaries, and assign the product of this join to a new spatial object, which we will call “world_trade_shapefile.” The following code joins the cleaned World Bank data frame from Step 5 (named “trade_gdp”) to our initial shapefile (assigned to the object “world_shapefile” in Step 4) based on two columns that are common to both. The primary key for the join is the “iso_a3” field; for the missing values, i.e. “-99”, in the column "iso_a3" in the "world_shapefile", we can instead join them with "trade_gdp" by country name, i.e. "name" in the "world_shapefile" and "Country Name" in the "trade_gdp". There are eight countries/regions that have "iso_a3" of “-99” in the "world_shapefile", and four of them can be successfully recognized and merged using the second key of country name. The joined results separately by the two keys for the rows missing and non-missing "iso_a3" in the "world_shapefile" are then combined vertically using rbind() function:
 
 ```{r}
-world_trade_shapefile <- 
-  rbind(left_join(world_shapefile[which(world_shapefile$iso_a3 !="-99"),], trade_gdp[,-which(colnames(trade_gdp) == "Country Name")],
-                  by="iso_a3"),
-        left_join(world_shapefile[which(world_shapefile$iso_a3 =="-99"),-which(colnames(world_shapefile) == "iso_a3")], trade_gdp, by= c("name" = "Country Name"))
+# merge world_shapefile and trade_gdp by iso_a3 and country name for non-missing and missing iso_a3 rows respectively
+world_trade_shapefile <- rbind(
+  left_join(world_shapefile[which(world_shapefile$iso_a3 !="-99"),], trade_gdp[,-which(colnames(trade_gdp) == "Country Name")],by="iso_a3"),
+  left_join(world_shapefile[which(world_shapefile$iso_a3 =="-99"),-which(colnames(world_shapefile) == "iso_a3")], trade_gdp, by= c("name" = "Country Name"))
 )
 ```
 
@@ -234,18 +241,21 @@ head(world_trade_shapefile)
 Currently, the field we want to map (named “trade_pct_gdp”) is a character field. We can confirm this using the class function, which returns the data type of a specified vector (world_trade_shapefile$trade_pct_gdp is simply the syntax we use to tell R that we are interested in the class of the “trade_pct_gdp” field within “world_trade_shapefile”.)
 
 ```{r}
+# check data type
 class(world_trade_shapefile$trade_pct_gdp)
 ```
 
 However, in order to generate a choropleth map of country-level variation in our variable of interest (here, trade as a percentage of GDP) through the tmap package, this variable must be converted from character to numeric (a different R data type). We can do this with the following:
 
 ```{r}
+# convert data type to numeric
 world_trade_shapefile$trade_pct_gdp<-as.numeric(world_trade_shapefile$trade_pct_gdp)
 ```
 
 We can confirm that the conversion has taken place, and that the field is therefore ready to map:
 
 ```{r}
+# check data type
 class(world_trade_shapefile$trade_pct_gdp) 
 ```
 
@@ -257,6 +267,7 @@ Let’s first make a simple choropleth map that gives us a foundation to work wi
 To stay organized, we’ll assign the map to an object (which we’ll call map1):
 
 ```{r}
+
 map1<-tm_shape(world_trade_shapefile)+
       tm_polygons(col="trade_pct_gdp", n=6, style="jenks", palette="BuGn")
 ```
@@ -376,6 +387,7 @@ In what follows, we will (1) go through the process of importing our dataset of 
 ## 10. Bring the CSV file of World Bank project locations into R Studio
 We will bring the CSV file of World Bank project locations into R Studio and assign the data frame to an object that we will call “worldbank_projectlocations_dataset”:
 ```{r}
+# turn the data frame to a spatial object by using coordinates
 worldbank_projectlocations_dataset<-read_csv("worldbank_projects_locations.csv")
 ```
 
@@ -401,6 +413,7 @@ In the code above, “worldbank_projectlocations_dataset” is the data frame we
 We can now plot these locations on a map using tmap’s tm_dots function; we will assign the resulting map of these locations to an object entitled “project_locations”.
 
 ```{r}
+# create visualization of the spatial object
 project_locations<-
   tm_shape(worldbank_locations_spatial)+
   tm_dots()
@@ -411,6 +424,7 @@ project_locations
 In the above code, we used the tm_shape function to indicate the object we are interested in mapping, and we called the tm_dots function to indicate that the object is a point layer. We can change the color of our points in much the same way we changed the color of our polygons:
 
 ```{r}
+# create visualization of the spatial object with the color of orange
 project_locations<-
   tm_shape(worldbank_locations_spatial)+
   tm_dots("orange")
@@ -437,6 +451,7 @@ In the code above, we are simply combining the code from Steps 4 and 11 above. W
 At this point, you probably have an intuitive sense of how you would go about changing the colors of the map layers. Let’s say we want our point layer to be red, and our polygons to be light blue:
 
 ```{r}
+# visualize the spatial object in light blue on top of the shapefile in red
 worldmap_projects<-
   tm_shape(world_shapefile)+
     tm_polygons("red2")+
@@ -450,6 +465,7 @@ worldmap_projects
 Now, let’s filter the large point layer of WB projects to include only projects in Malawi. Furthemore, let us say that among the projects in Malawi, we are only interested in studying the spatial distribution of projects (with respect to constituencies) that have recieved a funding commitment of more than \$25,000,000. We will assign projects located in Malawi, and that meet this \$25,000,000 threshold, by using the filter function in dplyr; we will assign the result to an object called “malawi_foreignaid_sites”.
 
 ```{r}
+# create a new spatial object by filtering the original spatial object based on the specified conditions
 malawi_foreignaid_sites<-filter(worldbank_locations_spatial, recipients=="Malawi" & total_commitments>25000000)
 ```
 
@@ -467,6 +483,7 @@ head(malawi_foreignaid_sites)
 ### 14a. Bring the Malawi constituency shapefile into R Studio
 The workshop data you downloaded contains a shapefile of Malawi constituency borders from the NYU Spatial Data Repository. The shapefile can also be found here. Bring the shapefile of Malawi constituencies into R Studio and assign it to an object called “malawi_shapefile”:
 ```{r}
+# read in the shapefile
 malawi_shapefile<-st_read("MAA.shp")
 ```
 
@@ -474,6 +491,7 @@ malawi_shapefile<-st_read("MAA.shp")
 To motivate our task, let’s first overlay “malawi_foreignaid_sites” (the spatial object we created above in Step 13) against the shapefile of Malawi constituency boundaries. As before, we will do this with tmap:
 
 ```{r}
+# visualize the new spatial object in light blue on top of the shapefile in red
 malawi_constituency_project_map<-
   tm_shape(malawi_shapefile)+
     tm_polygons("red2")+
