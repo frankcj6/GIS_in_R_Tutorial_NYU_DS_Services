@@ -260,6 +260,7 @@ class(world_trade_shapefile$trade_pct_gdp)
 ```
 
 ## 8. Generate a choropleth map!
+Choropleth Map is a type of thematic map that shows the pattern and distribution of the data by color or patterned propotionately. Some of its most famous use is to display the population density or per-capita income of a country. 
 We’re now ready to use tmap to generate a choropleth map of our variable of interest!
 ### 8a. Start out with a preliminary choropleth map
 Let’s first make a simple choropleth map that gives us a foundation to work with.
@@ -504,6 +505,8 @@ malawi_constituency_project_map
 We can use this visual representation to motivate our task: essentially, we want to find the number of distinct World Bank projects (represented as points in the above figure) within each district in Malawi (represented as polygons in the above figure).
 
 ## 15. Reproject our point layer and polygon layer into a projection appropriate for Malawi, and then use the st_join function to carry out a spatial join between the two layers
+Reprojection in GIS is actually changing the coordinates value from one coordinate system to another. Simply speaking, it gives you the ability to look at the same data from different views and that is really helpful for someone who wants to see the pattern of the data from a different perspective. 
+The main reason to reproject includes facilite the computation of some features while preserve some properties of the original data, changing territory because many reference system are optimized for a specific country. 
 
 ### 15a. Reproject the relevant data
 The sf package can only carry out a spatial join between vector layers that are in projected coordinates. Right now, both “malawi_shapefile” and “malawi_foreignaid_sites” are in a geographic coordinate system (specifically, WGS1984). We must therefore project these objects into a projected coordinate system that is appropriate for Malawi. A bit of research suggests that EPSG:20936 would be an appropriate projection for Malawi (https://epsg.io/20936). For more information and resources on coordinate systems and map projections, please see Appendix 1 in NYU Data Services’ QGIS tutorial, which is available here.
